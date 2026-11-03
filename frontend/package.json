@@ -1,0 +1,17 @@
+{
+  "name": "compumax-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "assets": "node scripts/crop-assets.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.2",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}
