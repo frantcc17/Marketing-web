@@ -11,7 +11,7 @@ const card = (p: Product): string => `
   <article class="product" data-tilt data-gama="${p.gama}">
     ${p.badge ? `<span class="product__badge">${p.badge}</span>` : ''}
     <div class="product__media">
-      <img src="${p.image}" alt="${p.name}" loading="lazy" style="object-position:${p.focus}" />
+      <img src="${p.image}" alt="${p.name}" loading="lazy" class="${p.fit ? 'is-cover' : ''}" style="object-position:${p.focus}" />
     </div>
     <div class="product__body">
       <span class="product__kind">${p.kind} · ${GAMAS[p.gama].tipo}</span>

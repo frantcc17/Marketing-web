@@ -70,7 +70,7 @@ export function mountFinder(root: HTMLElement, onPick: (gama: Gama, product: Pro
       const g = GAMAS[gama];
       body.innerHTML = `
         <div class="finder__result finder__result--${gama}">
-          <img src="${product.image}" alt="" style="object-position:${product.focus}" />
+          <img src="${product.image}" alt="" class="${product.fit ? 'is-cover' : ''}" style="object-position:${product.focus}" />
           <div>
             <span class="eyebrow">Tu solución exacta · ${g.label}</span>
             <h3>${product.name}</h3>

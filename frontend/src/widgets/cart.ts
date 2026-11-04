@@ -90,7 +90,7 @@ export class Cart {
           .map(
             ({ product, qty }) => `
         <li class="cart-line">
-          <img src="${product.image}" alt="" style="object-position:${product.focus}" />
+          <img src="${product.image}" alt="" class="${product.fit ? 'is-cover' : ''}" style="object-position:${product.focus}" />
           <div>
             <strong>${product.name}</strong>
             <span>${euro(product.price)}</span>
