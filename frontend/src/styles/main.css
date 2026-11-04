@@ -766,6 +766,17 @@ h2 {
   font-style: italic;
 }
 
+.gama-info__desc {
+  max-width: 680px;
+  margin: 12px auto 0;
+  color: var(--muted);
+}
+
+.gama-info__desc strong {
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .checks {
   display: flex;
   flex-wrap: wrap;

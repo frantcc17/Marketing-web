@@ -33,9 +33,9 @@ const STEPS: Step[] = [
     key: 'presupuesto',
     question: '¿Cuál es tu presupuesto?',
     options: [
-      { label: 'Hasta 600 €', value: '600', icon: '💶' },
-      { label: '600 – 1.500 €', value: '1500', icon: '💳' },
-      { label: 'Sin límites', value: '99999', icon: '🚀' },
+      { label: 'Hasta 900 €', value: '900', icon: '💶' },
+      { label: '900 – 1.300 €', value: '1300', icon: '💳' },
+      { label: 'Más de 1.300 €', value: '99999', icon: '🚀' },
     ],
   },
 ];
@@ -45,8 +45,8 @@ type Answers = Partial<Record<Step['key'], string>>;
 function recommend(a: Answers): { gama: Gama; product: Product } {
   const uso = a.uso as Uso;
   const budget = Number(a.presupuesto);
-  const exigente = uso === 'creatividad' || uso === 'gaming' || (a.perfil === 'profesional' && budget > 600);
-  const gama: Gama = exigente && budget > 600 ? 'sofisticada' : 'estandar';
+  const exigente = uso === 'creatividad' || uso === 'gaming' || (a.perfil === 'profesional' && budget > 900);
+  const gama: Gama = exigente && budget > 900 ? 'sofisticada' : 'estandar';
 
   const candidates = PRODUCTS.filter((p) => p.gama === gama);
   const product =

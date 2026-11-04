@@ -1,6 +1,6 @@
 // Selector de gamas (Estándar / Sofisticada) y rejilla de productos.
 
-import { GAMAS, PRODUCTS, euro, type Gama, type Product } from '../data/products';
+import { GAMAS, PRODUCTS, euro, fromPrice, type Gama, type Product } from '../data/products';
 import type { Cart } from './cart';
 import { tilt } from './effects';
 
@@ -41,6 +41,7 @@ export function mountCatalog(root: HTMLElement, cart: Cart): { show: (gama: Gama
     info.innerHTML = `
       <span class="eyebrow">${g.tipo} · ${g.audience}</span>
       <h3>${g.tagline}</h3>
+      <p class="gama-info__desc">${g.description} <strong>Desde ${euro(fromPrice(gama))}</strong></p>
       <ul class="checks">${g.bullets.map((b) => `<li>${b}</li>`).join('')}</ul>`;
 
     grid.classList.add('is-switching');
