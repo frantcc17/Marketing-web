@@ -189,3 +189,28 @@ describe("prompt e inyección", () => {
     expect(() => validateDecision({ ...base, ranking: [e("a", 1), e("b", 2)] }, ["a", "b"])).not.toThrow();
   });
 });
+
+import { findRedisConfig, redisEnvNames } from "../store.js";
+
+describe("detección de Redis en variables de entorno", () => {
+  it("KV_REST_API_* sin prefijo", () => {
+    expect(findRedisConfig({ KV_REST_API_URL: "https://a.upstash.io", KV_REST_API_TOKEN: "t" })).toMatchObject({ kind: "rest", url: "https://a.upstash.io", token: "t" });
+  });
+  it("con prefijo personalizado (p. ej. STORAGE_)", () => {
+    const env = { STORAGE_KV_REST_API_URL: "https://b.upstash.io", STORAGE_KV_REST_API_TOKEN: "tok", STORAGE_KV_REST_API_READ_ONLY_TOKEN: "ro" };
+    expect(findRedisConfig(env)).toMatchObject({ kind: "rest", token: "tok", via: "STORAGE_KV_REST_API_URL" });
+  });
+  it("UPSTASH_REDIS_REST_*", () => {
+    expect(findRedisConfig({ UPSTASH_REDIS_REST_URL: "https://c.upstash.io", UPSTASH_REDIS_REST_TOKEN: "x" })).toMatchObject({ kind: "rest", token: "x" });
+  });
+  it("solo REDIS_URL de Upstash: deriva la API REST", () => {
+    expect(findRedisConfig({ REDIS_URL: "rediss://default:secreto@d.upstash.io:6379" })).toMatchObject({ kind: "rest", url: "https://d.upstash.io", token: "secreto" });
+  });
+  it("REDIS_URL de otro proveedor: conexión TCP", () => {
+    expect(findRedisConfig({ REDIS_URL: "redis://default:p@redis-123.cloud.redislabs.com:12345" })).toMatchObject({ kind: "tcp" });
+  });
+  it("sin variables: memoria, y solo lista nombres", () => {
+    expect(findRedisConfig({ PATH: "/bin" })).toBeNull();
+    expect(redisEnvNames({ KV_REST_API_URL: "https://x", OTRA: "y" })).toEqual(["KV_REST_API_URL"]);
+  });
+});

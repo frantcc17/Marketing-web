@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 import { CONFIG, CONSUMIDORA, LEVERS, PRIVATE_LABEL, PRODUCTS, RETAILER, ROUNDS } from "./data/game.js";
 import { askAria, iaDisponible } from "./game/aria.js";
 import * as R from "./game/room.js";
-import { getStore, redisConfigured, type Store } from "./store.js";
+import { findRedisConfig, getStore, redisConfigured, redisEnvNames, type Store } from "./store.js";
 
 type Json = Record<string, unknown>;
 interface Result {
@@ -79,10 +79,25 @@ export async function handleApi(op: string, q: Json, body: Json, origin: string)
       consumidora: CONSUMIDORA,
     });
   }
-  if (op === "health") return ok({ ok: true, ia: iaDisponible(), store: redisConfigured() ? "redis" : "memory" });
+  if (op === "health") {
+    const cfg = findRedisConfig();
+    return ok({
+      ok: true,
+      ia: iaDisponible(),
+      store: cfg ? "redis" : "memory",
+      redis: cfg ? { modo: cfg.kind, variable: cfg.via } : null,
+      variablesDetectadas: redisEnvNames(),
+    });
+  }
 
   if (process.env.VERCEL && !redisConfigured()) {
-    return fail(500, "Falta conectar Upstash Redis al proyecto de Vercel (Storage → Upstash → Redis). Mira el README.");
+    const names = redisEnvNames();
+    return fail(
+      500,
+      names.length
+        ? `Hay variables de Redis (${names.join(", ")}) pero no se reconoce su formato. Abre /api?op=health y revisa el README.`
+        : "No se ve ninguna variable de Redis. Conecta la base al proyecto (Storage) y vuelve a desplegar (Deployments → Redeploy): las variables solo llegan a despliegues nuevos.",
+    );
   }
   const store = getStore();
   const code = normCode(q.code ?? body.code);
