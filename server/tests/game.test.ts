@@ -214,3 +214,13 @@ describe("detección de Redis en variables de entorno", () => {
     expect(redisEnvNames({ KV_REST_API_URL: "https://x", OTRA: "y" })).toEqual(["KV_REST_API_URL"]);
   });
 });
+
+import { toHash } from "../store.js";
+
+describe("respuestas de HGETALL", () => {
+  it("acepta lista plana (Upstash sin deserializar) y objeto", () => {
+    expect(toHash(["v", "3", "data", '{"a":1}'])).toEqual({ v: "3", data: '{"a":1}' });
+    expect(toHash({ v: 3, data: '{"a":1}' })).toEqual({ v: "3", data: '{"a":1}' });
+    expect(toHash(null)).toEqual({});
+  });
+});

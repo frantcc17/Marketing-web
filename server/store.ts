@@ -31,12 +31,26 @@ if (cur == false and ARGV[1] == '0') or cur == ARGV[1] then
 end
 return 0`;
 
+/** HGETALL puede llegar como objeto o como lista plana [clave, valor, …] según el cliente. */
+export function toHash(raw: unknown): Record<string, string> {
+  if (!raw) return {};
+  if (Array.isArray(raw)) {
+    const out: Record<string, string> = {};
+    for (let i = 0; i + 1 < raw.length; i += 2) out[String(raw[i])] = String(raw[i + 1]);
+    return out;
+  }
+  if (typeof raw === "object") {
+    return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]));
+  }
+  return {};
+}
+
 class RedisStore implements Store {
   kind = "redis" as const;
   constructor(private r: Redis) {}
   async get(code: string) {
-    const h = await this.r.hgetall<Record<string, string>>(`room:${code}`);
-    if (!h || !h.data) return null;
+    const h = toHash(await this.r.hgetall(`room:${code}`));
+    if (!h.data) return null;
     return { data: JSON.parse(h.data) as RoomData, v: Number(h.v) };
   }
   async cas(code: string, v: number, data: RoomData) {
@@ -47,8 +61,8 @@ class RedisStore implements Store {
     return (await this.r.set(`lock:${key}`, "1", { nx: true, ex: ttlSec })) === "OK";
   }
   async seenAll(code: string) {
-    const h = await this.r.hgetall<Record<string, string>>(`seen:${code}`);
-    return Object.fromEntries(Object.entries(h ?? {}).map(([k, val]) => [k, Number(val)]));
+    const h = toHash(await this.r.hgetall(`seen:${code}`));
+    return Object.fromEntries(Object.entries(h).map(([k, val]) => [k, Number(val)]));
   }
   async seen(code: string, playerId: string, ts: number) {
     await this.r.hset(`seen:${code}`, { [playerId]: String(ts) });
