@@ -22,8 +22,10 @@ export function Play() {
     return new URLSearchParams(location.search).get("pid") || (c ? safeStorage()?.getItem(keyFor(c)) ?? null : null);
   });
 
-  const { data: state, setData: setState, online } = usePoll<PlayState>(
-    code && !roomError ? () => api<PlayState>("state", { code, pid: pid ?? undefined }) : null,
+  // Cada respuesta se etiqueta con el jugador con el que se pidió, para no confundir
+  // una respuesta antigua (de antes de unirse) con "el servidor no conoce a este jugador".
+  const { data: state, setData: setState, online } = usePoll<PlayState & { askedAs?: string | null }>(
+    code && !roomError ? () => api<PlayState>("state", { code, pid: pid ?? undefined }).then((s) => ({ ...s, askedAs: pid })) : null,
     1000,
     (e) => {
       if (e instanceof ApiError && e.status === 404) setRoomError(e.message);
@@ -32,7 +34,7 @@ export function Play() {
 
   // Si el servidor ya no conoce a este jugador, vuelve a la pantalla de unirse.
   useEffect(() => {
-    if (state && pid && !state.me) {
+    if (state && pid && state.askedAs === pid && !state.me) {
       safeStorage()?.removeItem(keyFor(code));
       setPid(null);
     }
@@ -44,12 +46,12 @@ export function Play() {
       draft: (message, levers) => {
         window.clearTimeout(draftTimer.current);
         draftTimer.current = window.setTimeout(() => {
-          api<PlayState>("draft", {}, { code, pid, message, levers }).then(setState).catch(() => {});
+          api<PlayState>("draft", {}, { code, pid, message, levers }).then((s) => setState({ ...s, askedAs: pid })).catch(() => {});
         }, 300);
       },
       submit: (message, levers) => {
         window.clearTimeout(draftTimer.current);
-        api<PlayState>("submit", {}, { code, pid, message, levers }).then(setState).catch(() => {});
+        api<PlayState>("submit", {}, { code, pid, message, levers }).then((s) => setState({ ...s, askedAs: pid })).catch(() => {});
       },
     }),
     [code, pid, setState],
@@ -99,6 +101,7 @@ export function Play() {
             counts={state?.teamCounts ?? {}}
             onJoined={(newPid) => {
               try { safeStorage()?.setItem(keyFor(code), newPid); } catch { /* sin almacenamiento */ }
+              setState(null);
               setPid(newPid);
             }}
           />
