@@ -1,0 +1,3 @@
+// Función de Vercel: toda la API del juego en /api?op=...
+// api/_server.mjs se genera en `npm run build` (scripts/build-api.mjs) con todo el servidor empaquetado.
+export { default } from "./_server.mjs";
