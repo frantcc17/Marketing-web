@@ -1,8 +1,61 @@
-import { useEffect, useState } from "react";
-import { io, type Socket } from "socket.io-client";
+import { useEffect, useRef, useState } from "react";
 import type { Lever, Product, RoundDef } from "@shared/types";
 
-export const socket: Socket = io({ transports: ["websocket", "polling"] });
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+/** Llama a la API del juego: /api?op=... (GET sin cuerpo, POST con cuerpo JSON). */
+export async function api<T>(op: string, params: Record<string, string | undefined> = {}, body?: unknown): Promise<T> {
+  const qs = new URLSearchParams({ op });
+  for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+  const res = await fetch(`/api?${qs}`, body === undefined ? { cache: "no-store" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError((json as { error?: string }).error ?? `Error ${res.status}`, res.status);
+  return json as T;
+}
+
+/**
+ * Consulta periódica (sustituye a los WebSockets: Vercel no los mantiene abiertos).
+ * Devuelve el último dato, si hay conexión y un setter para aplicar respuestas de acciones al instante.
+ */
+export function usePoll<T>(fetcher: (() => Promise<T>) | null, intervalMs = 1000, onError?: (e: unknown) => void) {
+  const [data, setData] = useState<T | null>(null);
+  const [online, setOnline] = useState(true);
+  const fetchRef = useRef(fetcher);
+  const errRef = useRef(onError);
+  fetchRef.current = fetcher;
+  errRef.current = onError;
+  const active = !!fetcher;
+  useEffect(() => {
+    if (!active) return;
+    let stop = false;
+    let timer: number | undefined;
+    const loop = async () => {
+      const f = fetchRef.current;
+      if (!f) return;
+      try {
+        const d = await f();
+        if (stop) return;
+        setData(d);
+        setOnline(true);
+      } catch (e) {
+        if (stop) return;
+        if (e instanceof ApiError) errRef.current?.(e);
+        else setOnline(false);
+      }
+      if (!stop) timer = window.setTimeout(loop, document.hidden ? intervalMs * 3 : intervalMs);
+    };
+    void loop();
+    return () => {
+      stop = true;
+      window.clearTimeout(timer);
+    };
+  }, [active, intervalMs]);
+  return { data, setData, online };
+}
 
 export interface PublicConfig {
   products: Product[];
@@ -17,25 +70,10 @@ let configPromise: Promise<PublicConfig> | null = null;
 export function useConfig(): PublicConfig | null {
   const [cfg, setCfg] = useState<PublicConfig | null>(null);
   useEffect(() => {
-    configPromise ??= fetch("/api/config").then((r) => r.json());
+    configPromise ??= api<PublicConfig>("config");
     configPromise.then(setCfg).catch(() => (configPromise = null));
   }, []);
   return cfg;
-}
-
-export function useConnected(): boolean {
-  const [c, setC] = useState(socket.connected);
-  useEffect(() => {
-    const on = () => setC(true);
-    const off = () => setC(false);
-    socket.on("connect", on);
-    socket.on("disconnect", off);
-    return () => {
-      socket.off("connect", on);
-      socket.off("disconnect", off);
-    };
-  }, []);
-  return c;
 }
 
 /** Segundos restantes hasta `deadline`, corrigiendo el desfase con el reloj del servidor. */

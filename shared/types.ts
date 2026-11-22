@@ -126,6 +126,7 @@ export interface HostState {
   thinking: boolean;
   revealed: boolean;
   iaDisponible: boolean;
+  runId: number;
 }
 
 export interface TeamDraft {

@@ -2,51 +2,62 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LeverId, PlayState, Product } from "@shared/types";
 import { Aria, SpeechBubble, type AriaMood } from "../components/Aria";
 import { IconAlert, IconCheck, IconClock, IconLock, IconSend, IconTarget, IconTrophy, IconWifi, LEVER_ICONS } from "../components/Icons";
-import { fmtEur, fmtTime, safeStorage, socket, useConfig, useConnected, useCountdown, type PublicConfig } from "../lib";
+import { ApiError, api, fmtEur, fmtTime, safeStorage, useConfig, useCountdown, usePoll, type PublicConfig } from "../lib";
 
 const keyFor = (code: string) => `cal:player:${code}`;
 
+export interface PlayActions {
+  draft: (message: string, levers: LeverId[]) => void;
+  submit: (message: string, levers: LeverId[]) => void;
+}
+
 export function Play() {
   const cfg = useConfig();
-  const connected = useConnected();
   const [code, setCode] = useState(() => (new URLSearchParams(location.search).get("sala") ?? "").toUpperCase());
   const [codeInput, setCodeInput] = useState("");
-  const [state, setState] = useState<PlayState | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
-  const [joined, setJoined] = useState(false);
+  // ?pid= permite recuperar la sesión desde un enlace (p. ej. al cambiar de navegador).
+  const [pid, setPid] = useState<string | null>(() => {
+    const c = (new URLSearchParams(location.search).get("sala") ?? "").toUpperCase();
+    return new URLSearchParams(location.search).get("pid") || (c ? safeStorage()?.getItem(keyFor(c)) ?? null : null);
+  });
 
-  useEffect(() => {
-    const onState = (s: PlayState) => setState(s);
-    socket.on("play:state", onState);
-    return () => {
-      socket.off("play:state", onState);
-    };
-  }, []);
+  const { data: state, setData: setState, online } = usePoll<PlayState>(
+    code && !roomError ? () => api<PlayState>("state", { code, pid: pid ?? undefined }) : null,
+    1000,
+    (e) => {
+      if (e instanceof ApiError && e.status === 404) setRoomError(e.message);
+    },
+  );
 
+  // Si el servidor ya no conoce a este jugador, vuelve a la pantalla de unirse.
   useEffect(() => {
-    if (!connected || !code) return;
-    // ?pid= permite recuperar la sesión desde un enlace (p. ej. al cambiar de navegador).
-    const pid = new URLSearchParams(location.search).get("pid") || safeStorage()?.getItem(keyFor(code));
-    const watch = () =>
-      socket.emit("play:watch", { code }, (r: { ok: boolean; error?: string }) => {
-        if (!r.ok) setRoomError(r.error ?? "No existe esa sala.");
-        else setRoomError(null);
-      });
-    if (pid) {
-      socket.emit("play:resume", { code, playerId: pid }, (r: { ok: boolean }) => {
-        if (r.ok) setJoined(true);
-        else {
-          safeStorage()?.removeItem(keyFor(code));
-          setJoined(false);
-          watch();
-        }
-      });
-    } else watch();
-  }, [connected, code]);
+    if (state && pid && !state.me) {
+      safeStorage()?.removeItem(keyFor(code));
+      setPid(null);
+    }
+  }, [state, pid, code]);
+
+  const draftTimer = useRef<number>();
+  const actions: PlayActions = useMemo(
+    () => ({
+      draft: (message, levers) => {
+        window.clearTimeout(draftTimer.current);
+        draftTimer.current = window.setTimeout(() => {
+          api<PlayState>("draft", {}, { code, pid, message, levers }).then(setState).catch(() => {});
+        }, 300);
+      },
+      submit: (message, levers) => {
+        window.clearTimeout(draftTimer.current);
+        api<PlayState>("submit", {}, { code, pid, message, levers }).then(setState).catch(() => {});
+      },
+    }),
+    [code, pid, setState],
+  );
 
   if (!cfg) return <div className="m-screen center-msg">Cargando…</div>;
 
-  const banner = !connected ? <div className="m-toast"><IconWifi size={16} /> Reconectando…</div> : null;
+  const banner = !online ? <div className="m-toast"><IconWifi size={16} /> Reconectando…</div> : null;
 
   if (!code || roomError) {
     return (
@@ -61,6 +72,7 @@ export function Play() {
             if (c) {
               setRoomError(null);
               setCode(c);
+              setPid(safeStorage()?.getItem(keyFor(c)) ?? null);
               history.replaceState(null, "", `/play?sala=${c}`);
             }
           }}
@@ -74,11 +86,23 @@ export function Play() {
     );
   }
 
-  if (!joined || !state?.me) {
+  if (!pid || !state?.me) {
     return (
       <div className="m-screen">
         {banner}
-        <Join code={code} cfg={cfg} counts={state?.teamCounts ?? {}} onJoined={(pid) => { try { safeStorage()?.setItem(keyFor(code), pid); } catch { /* */ } setJoined(true); }} />
+        {pid && !state ? (
+          <div className="center-msg">Conectando…</div>
+        ) : (
+          <Join
+            code={code}
+            cfg={cfg}
+            counts={state?.teamCounts ?? {}}
+            onJoined={(newPid) => {
+              try { safeStorage()?.setItem(keyFor(code), newPid); } catch { /* sin almacenamiento */ }
+              setPid(newPid);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -86,7 +110,7 @@ export function Play() {
   return (
     <div className="m-screen">
       {banner}
-      <PlayerScreens state={state} cfg={cfg} />
+      <PlayerScreens state={state} cfg={cfg} actions={actions} />
     </div>
   );
 }
@@ -115,11 +139,10 @@ function Join({ code, cfg, counts, onJoined }: { code: string; cfg: PublicConfig
     if (!name.trim()) return setError("Escribe tu nombre.");
     if (!team) return setError("Elige una marca.");
     setBusy(true);
-    socket.emit("play:join", { code, name, teamId: team }, (r: { ok: boolean; playerId?: string; error?: string }) => {
-      setBusy(false);
-      if (r.ok && r.playerId) onJoined(r.playerId);
-      else setError(r.error ?? "No se ha podido entrar.");
-    });
+    api<{ playerId: string }>("join", {}, { code, name, teamId: team })
+      .then((r) => onJoined(r.playerId))
+      .catch((err) => setError(err instanceof Error ? err.message : "No se ha podido entrar."))
+      .finally(() => setBusy(false));
   };
   return (
     <form className="m-stack" onSubmit={submit}>
@@ -160,7 +183,7 @@ function Join({ code, cfg, counts, onJoined }: { code: string; cfg: PublicConfig
 }
 
 // ---------------- Pantallas del jugador ----------------
-function PlayerScreens({ state, cfg }: { state: PlayState; cfg: PublicConfig }) {
+function PlayerScreens({ state, cfg, actions }: { state: PlayState; cfg: PublicConfig; actions: PlayActions }) {
   const product = cfg.products.find((p) => p.id === state.me!.teamId)!;
   const round = cfg.rounds[state.roundIndex];
   const header = (
@@ -188,7 +211,7 @@ function PlayerScreens({ state, cfg }: { state: PlayState; cfg: PublicConfig }) 
   }
 
   if (state.phase === "prep" && state.draft) {
-    return <PrepScreen state={state} cfg={cfg} product={product} header={header} />;
+    return <PrepScreen state={state} cfg={cfg} product={product} header={header} actions={actions} />;
   }
 
   if (state.phase === "thinking" || (state.phase === "prep" && !state.draft)) {
@@ -236,34 +259,45 @@ function ProductCard({ product }: { product: Product }) {
   );
 }
 
-function PrepScreen({ state, cfg, product, header }: { state: PlayState; cfg: PublicConfig; product: Product; header: React.ReactNode }) {
-  const draft = state.draft!;
+function PrepScreen({ state, cfg, product, header, actions }: { state: PlayState; cfg: PublicConfig; product: Product; header: React.ReactNode; actions: PlayActions }) {
+  const serverDraft = state.draft!;
   const round = cfg.rounds[state.roundIndex];
   const left = useCountdown(state.deadline, state.serverNow);
   const [tab, setTab] = useState<"ficha" | "producto">("ficha");
-  const [message, setMessage] = useState(draft.message);
+  const [message, setMessage] = useState(serverDraft.message);
+  const [levers, setLevers] = useState<LeverId[]>(serverDraft.levers);
+  const [localSubmitted, setLocalSubmitted] = useState(false);
   const [typing, setTyping] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const typingTimer = useRef<number>();
+  const lastEdit = useRef(0);
   const max = cfg.config.maxMessage;
   const maxLevers = cfg.config.maxLevers;
+  const draft = { ...serverDraft, levers, submitted: serverDraft.submitted || localSubmitted };
 
-  // Sincroniza el texto que escriben los compañeros si este móvil no está editando.
+  // Sincroniza lo que editan los compañeros si este móvil no acaba de editar.
   useEffect(() => {
-    if (document.activeElement !== taRef.current) setMessage(draft.message);
-  }, [draft.message]);
+    if (Date.now() - lastEdit.current < 2500) return;
+    if (document.activeElement !== taRef.current) setMessage(serverDraft.message);
+    setLevers(serverDraft.levers);
+  }, [serverDraft.message, serverDraft.levers.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const send = (msg: string, levers: LeverId[]) => socket.emit("play:draft", { message: msg, levers });
+  const send = (msg: string, lv: LeverId[]) => {
+    lastEdit.current = Date.now();
+    actions.draft(msg, lv);
+  };
   const toggle = (id: LeverId) => {
     if (draft.submitted) return;
-    const on = draft.levers.includes(id);
-    if (!on && draft.levers.length >= maxLevers) return;
-    send(message, on ? draft.levers.filter((l) => l !== id) : [...draft.levers, id]);
+    const on = levers.includes(id);
+    if (!on && levers.length >= maxLevers) return;
+    const next = on ? levers.filter((l) => l !== id) : [...levers, id];
+    setLevers(next);
+    send(message, next);
   };
   const onType = (v: string) => {
     const t = v.slice(0, max);
     setMessage(t);
-    send(t, draft.levers);
+    send(t, levers);
     setTyping(true);
     window.clearTimeout(typingTimer.current);
     typingTimer.current = window.setTimeout(() => setTyping(false), 900);
@@ -353,7 +387,7 @@ function PrepScreen({ state, cfg, product, header }: { state: PlayState; cfg: Pu
                 </div>
               ) : null}
 
-              <button className="btn btn--primary btn--block btn--lg" onClick={() => socket.emit("play:submit")}>
+              <button className="btn btn--primary btn--block btn--lg" onClick={() => { actions.submit(message, levers); setLocalSubmitted(true); }}>
                 <IconSend size={18} /> Enviar a ARIA
               </button>
               <p className="muted small center">Al enviar, la ficha queda bloqueada para todo el equipo.</p>

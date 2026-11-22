@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { HostState, RoundResult, Standing } from "@shared/types";
 import { Aria, SpeechBubble } from "../components/Aria";
 import { AriaStage, Terminal } from "../components/AriaStage";
 import {
   IconAlert, IconArrow, IconBot, IconCheck, IconClock, IconLock, IconPlay, IconPlus, IconRefresh, IconStop, IconTrophy, IconUsers, IconWifi,
 } from "../components/Icons";
-import { fmtTime, safeStorage, socket, useConfig, useConnected, useCountdown, type PublicConfig } from "../lib";
+import { ApiError, api, fmtTime, safeStorage, useConfig, useCountdown, usePoll, type PublicConfig } from "../lib";
 
 const HOST_KEY = "cal:host";
 
@@ -27,74 +27,108 @@ function Canvas({ children }: { children: ReactNode }) {
   );
 }
 
+interface HostSession {
+  code: string;
+  token: string;
+}
+
+function loadSession(): HostSession | null {
+  // ?sala=CODIGO&token=... permite reabrir la pantalla del profesor en otro dispositivo.
+  const qs = new URLSearchParams(location.search);
+  const code = qs.get("sala")?.toUpperCase();
+  const token = qs.get("token");
+  if (code && token) return { code, token };
+  try {
+    const raw = safeStorage()?.getItem(HOST_KEY);
+    return raw ? (JSON.parse(raw) as HostSession) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function Host() {
   const cfg = useConfig();
-  const connected = useConnected();
-  // ?sala=CODIGO permite reabrir la pantalla del profesor en otro dispositivo.
-  const [code, setCode] = useState<string | null>(
-    () => new URLSearchParams(location.search).get("sala")?.toUpperCase() || safeStorage()?.getItem(HOST_KEY) || null,
-  );
-  const [state, setState] = useState<HostState | null>(null);
+  const [session, setSession] = useState<HostSession | null>(loadSession);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    const onState = (s: HostState) => setState(s);
-    const onErr = (e: string) => {
-      setError(e);
-      setTimeout(() => setError(null), 4000);
-    };
-    socket.on("host:state", onState);
-    socket.on("host:error", onErr);
-    return () => {
-      socket.off("host:state", onState);
-      socket.off("host:error", onErr);
-    };
+  const showError = useCallback((e: unknown) => {
+    setError(e instanceof Error ? e.message : String(e));
+    window.setTimeout(() => setError(null), 5000);
   }, []);
 
+  const forget = useCallback(() => {
+    safeStorage()?.removeItem(HOST_KEY);
+    setSession(null);
+  }, []);
+
+  const { data: state, setData: setState, online } = usePoll<HostState>(
+    session ? () => api<HostState>("host", { code: session.code, token: session.token }) : null,
+    1000,
+    (e) => {
+      if (e instanceof ApiError && e.status === 404) forget();
+      else showError(e);
+    },
+  );
+
+  // Cuando la ronda queda pendiente de decisión, esta pantalla pide a ARIA que decida (una vez por petición).
+  const askedRun = useRef<{ runId: number; at: number } | null>(null);
   useEffect(() => {
-    if (!connected || !code) return;
-    socket.emit("host:attach", { code }, (r: { ok: boolean }) => {
-      if (!r.ok) {
-        safeStorage()?.removeItem(HOST_KEY);
-        setCode(null);
-        setState(null);
-      }
-    });
-  }, [connected, code]);
+    if (!session || !state || state.phase !== "thinking" || !state.thinking) return;
+    const prev = askedRun.current;
+    if (prev && prev.runId === state.runId && Date.now() - prev.at < 160_000) return;
+    askedRun.current = { runId: state.runId, at: Date.now() };
+    api<HostState | { busy: true }>("aria", {}, { code: session.code, token: session.token })
+      .then((r) => {
+        if (r && "phase" in r) setState(r);
+      })
+      .catch(showError);
+  }, [session, state, setState, showError]);
 
-  const create = () =>
-    socket.emit("host:create", {}, (r: { ok: boolean; code: string }) => {
-      if (r.ok) {
-        try { safeStorage()?.setItem(HOST_KEY, r.code); } catch { /* sin almacenamiento */ }
-        setCode(r.code);
-      }
-    });
+  const create = async () => {
+    setBusy(true);
+    try {
+      const r = await api<HostSession>("create", {}, {});
+      try { safeStorage()?.setItem(HOST_KEY, JSON.stringify(r)); } catch { /* sin almacenamiento */ }
+      setSession(r);
+    } catch (e) {
+      showError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  const act = useCallback((action: string, value?: number) => socket.emit("host:action", { code, action, value }), [code]);
+  const act = useCallback(
+    (action: string, value?: number) => {
+      if (!session) return;
+      api<HostState>("action", {}, { code: session.code, token: session.token, action, value }).then(setState).catch(showError);
+    },
+    [session, setState, showError],
+  );
 
   if (!cfg) return <Canvas><div className="center-msg">Cargando…</div></Canvas>;
 
   return (
     <Canvas>
-      {!connected ? <div className="toast toast--warn"><IconWifi size={16} /> Reconectando con el servidor…</div> : null}
+      {!online ? <div className="toast toast--warn"><IconWifi size={16} /> Reconectando con el servidor…</div> : null}
       {error ? <div className="toast toast--warn"><IconAlert size={16} /> {error}</div> : null}
-      {!code || !state ? (
-        <Welcome onCreate={create} />
+      {!session || !state ? (
+        <Welcome onCreate={create} busy={busy || (!!session && !state)} />
       ) : (
-        <HostScreens state={state} cfg={cfg} act={act} onNewGame={() => { safeStorage()?.removeItem(HOST_KEY); setCode(null); setState(null); }} />
+        <HostScreens state={state} cfg={cfg} act={act} onNewGame={forget} />
       )}
     </Canvas>
   );
 }
 
-function Welcome({ onCreate }: { onCreate: () => void }) {
+function Welcome({ onCreate, busy }: { onCreate: () => void; busy: boolean }) {
   return (
     <div className="welcome">
       <Aria mood="idle" size={180} />
       <h1 className="display">Convence al algoritmo</h1>
       <p className="lead">Año 2027. Lucía ya no compra: compra ARIA, su agente de IA. Cinco marcas de auriculares compiten por convencerla.</p>
-      <button className="btn btn--primary btn--lg" onClick={onCreate}>
-        <IconPlay size={20} /> Crear partida
+      <button className="btn btn--primary btn--lg" onClick={onCreate} disabled={busy}>
+        <IconPlay size={20} /> {busy ? "Preparando…" : "Crear partida"}
       </button>
     </div>
   );

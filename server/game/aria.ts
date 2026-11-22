@@ -18,7 +18,7 @@ export function iaDisponible(): boolean {
 }
 
 function getClient(): Anthropic {
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 90_000, maxRetries: 1 });
+  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 45_000, maxRetries: 0 });
   return client;
 }
 

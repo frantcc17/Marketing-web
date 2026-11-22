@@ -15,5 +15,5 @@
     "baseUrl": ".",
     "paths": { "@shared/*": ["shared/*"] }
   },
-  "include": ["server", "client/src", "shared", "vite.config.ts"]
+  "include": ["server", "api", "client/src", "shared", "vite.config.ts"]
 }
