@@ -198,7 +198,7 @@ function Lobby({ state, cfg, act, onNewGame }: { state: HostState; cfg: PublicCo
                   <span className="brand-bar" />
                   <div className="team-name">{p.nombre}</div>
                   <div className="team-members">
-                    {t.members.length === 0 ? <span className="muted">Esperando equipo…</span> : null}
+                    {t.members.length === 0 ? <span className="muted">Esperando al grupo…</span> : null}
                     {t.members.map((m) => (
                       <span key={m.id} className={`member ${m.connected ? "" : "off"}`}>
                         {m.bot ? <IconBot size={14} /> : null}
@@ -206,7 +206,7 @@ function Lobby({ state, cfg, act, onNewGame }: { state: HostState; cfg: PublicCo
                       </span>
                     ))}
                   </div>
-                  <div className="mono team-count">{t.members.length}/{cfg.config.maxPorEquipo}</div>
+                  <div className={`mono team-count ${t.members.length ? "lime" : ""}`}>{t.members.length ? "LISTO" : "LIBRE"}</div>
                 </li>
               );
             })}
@@ -417,6 +417,7 @@ const LESSONS: string[] = [
   "Pregunta a la clase: ¿quién pagó un banner? ¿Qué vio ARIA de él?",
   "Pregunta: ¿qué equipos activaron Audiencia Club y cómo cambió su mensaje?",
   "Pregunta: ¿cómo se defiende una marca cuando el súper compite con ella en su propia tienda?",
+  "Pregunta: ¿qué marca se vendió como «eco» sin datos? ¿Qué le pasó?",
 ];
 
 function Scoreboard({ standings, cfg, compact }: { standings: Standing[]; cfg: PublicConfig; compact?: boolean }) {

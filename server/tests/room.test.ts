@@ -14,7 +14,7 @@ const fallback = (d: R.RoomData) => {
 };
 
 describe("partida completa en modo demo (estado serializable)", () => {
-  it("juega 3 rondas con bots y penaliza falsedades y manipulación", () => {
+  it("juega 4 rondas con bots y penaliza falsedades, manipulación y greenwashing", () => {
     let now = 1_000_000;
     let d = R.createRoomData("TEST-01", now);
     const human = R.join(d, "Ana", "pulso").player!;
@@ -22,7 +22,7 @@ describe("partida completa en modo demo (estado serializable)", () => {
     R.fillBots(d, now);
     expect(d.players).toHaveLength(5);
 
-    for (let ronda = 0; ronda < 3; ronda++) {
+    for (let ronda = 0; ronda < 4; ronda++) {
       if (ronda === 0) expect(R.startRound(d, now)).toBeUndefined();
       else expect(R.nextRound(d, now)).toBe(true);
       expect(d.phase).toBe("prep");
@@ -38,11 +38,11 @@ describe("partida completa en modo demo (estado serializable)", () => {
       d = JSON.parse(JSON.stringify(d));
       expect(fallback(d)).toBe(true);
       expect(R.reveal(d)).toBe(true);
-      expect(d.results[ronda].decision.ranking.length).toBe(ronda === 2 ? 6 : 5);
+      expect(d.results[ronda].decision.ranking.length).toBe(ronda >= 2 ? 6 : 5);
       expect(R.playView(d, human.id, {}, now).myResult).not.toBeNull();
     }
 
-    const [r1, r2, r3] = d.results;
+    const [r1, r2, r3, r4] = d.results;
     expect(r1.decision.ranking.find((r) => r.marca_id === "onda")!.manipulacion).toBe(true);
     expect(r1.scores.find((s) => s.teamId === "onda")!.penalManip).toBe(-2);
     expect(r1.decision.ranking.find((r) => r.marca_id === "bassbox")!.afirmacion_falsa).toBe(true);
@@ -50,9 +50,14 @@ describe("partida completa en modo demo (estado serializable)", () => {
     expect(r2.decision.ranking.find((r) => r.marca_id === "bassbox")!.afirmacion_falsa).toBe(true);
     expect(r3.decision.ranking.some((r) => r.marca_id === "club")).toBe(true);
     expect(r3.decision.ranking.find((r) => r.marca_id === "bassbox")!.manipulacion).toBe(true);
+    // Ronda 4: BassBox se vende como «eco» con blíster de plástico; gana una marca con datos verdes reales.
+    expect(r4.decision.ranking.find((r) => r.marca_id === "bassbox")!.afirmacion_falsa).toBe(true);
+    expect(r4.decision.ranking.some((r) => r.marca_id === "club")).toBe(true);
+    expect(["ritmo", "pulso"]).toContain(r4.ganadorId);
 
     expect(R.nextRound(d, now)).toBe(true);
     expect(d.phase).toBe("final");
+    expect(d.results).toHaveLength(4);
     expect(R.standings(d)).toHaveLength(5);
 
     R.reset(d);
@@ -105,10 +110,15 @@ describe("API HTTP con almacenamiento en memoria", () => {
     const host = await handleApi("host", { code: created.code, token: created.token }, {}, "");
     expect((host.body as any).joinUrl).toBe(`https://juego.example/play?sala=${created.code}`);
 
-    // 3 alumnos entran a la vez en la misma marca y un cuarto no cabe.
-    const joins = await Promise.all(["Ana", "Bea", "Carla", "Dani"].map((name) => handleApi("join", {}, { code: created.code, name, teamId: "pulso" }, "")));
-    expect(joins.filter((j) => j.status === 200)).toHaveLength(3);
-    expect(joins.filter((j) => j.status === 400)).toHaveLength(1);
+    // 4 grupos intentan coger la misma marca a la vez: solo entra uno (un dispositivo por grupo).
+    const joins = await Promise.all(["Grupo 1", "Grupo 2", "Grupo 3", "Grupo 4"].map((name) => handleApi("join", {}, { code: created.code, name, teamId: "pulso" }, "")));
+    expect(joins.filter((j) => j.status === 200)).toHaveLength(1);
+    expect(joins.filter((j) => j.status === 400)).toHaveLength(3);
+    // El grupo que entró puede recuperar su sitio desde otro móvil con el mismo nombre.
+    const okJoin = joins.find((j) => j.status === 200)!;
+    const winnerName = ["Grupo 1", "Grupo 2", "Grupo 3", "Grupo 4"][joins.indexOf(okJoin)];
+    const again = await handleApi("join", {}, { code: created.code, name: winnerName.toLowerCase(), teamId: "pulso" }, "");
+    expect((again.body as any).playerId).toBe((okJoin.body as any).playerId);
 
     await handleApi("action", {}, { code: created.code, token: created.token, action: "start" }, "");
     const pid = (joins.find((j) => j.status === 200)!.body as { playerId: string }).playerId;

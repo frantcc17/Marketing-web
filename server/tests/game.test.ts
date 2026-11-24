@@ -73,10 +73,13 @@ describe("detección de afirmaciones falsas", () => {
   it("más barata sin serlo", () => expect(detectFalseClaim(withMsg("onda", "Los más baratos"), cat)).not.toBe(""));
   it("reparable sin serlo", () => expect(detectFalseClaim(withMsg("nebula", "Reparables"), cat)).not.toBe(""));
   it("sin plástico con envase de plástico", () => expect(detectFalseClaim(withMsg("nebula", "Caja sin plástico"), cat)).not.toBe(""));
+  it("greenwashing: «eco» con envase de plástico y sin reparar", () => expect(detectFalseClaim(withMsg("nebula", "Auriculares eco y sostenibles"), cat)).not.toBe(""));
+  it("el nombre «Ritmo Verde» no cuenta como afirmación verde", () => expect(detectFalseClaim(withMsg("bassbox", "Más baratos que Ritmo Verde"), cat)).toBe(""));
   it("afirmaciones verdaderas no penalizan", () => {
     expect(detectFalseClaim(withMsg("ritmo", "Reparables, IPX5, sin plástico y 3 años de garantía"), cat)).toBe("");
     expect(detectFalseClaim(withMsg("nebula", "40 horas y cancelación de ruido"), cat)).toBe("");
     expect(detectFalseClaim(withMsg("bassbox", "Los más baratos"), cat)).toBe("");
+    expect(detectFalseClaim(withMsg("ritmo", "Sostenibles de verdad: reparables"), cat)).toBe("");
   });
 });
 

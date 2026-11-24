@@ -79,7 +79,12 @@ export function join(d: RoomData, name: string, teamId: string): { player?: Play
   const clean = name.trim().slice(0, 24);
   if (!clean) return { error: "Escribe tu nombre." };
   if (!PRODUCTS.some((p) => p.id === teamId)) return { error: "Marca no válida." };
-  if (teamMembers(d, teamId).length >= CONFIG.maxPorEquipo) return { error: "Esa marca ya tiene 3 personas." };
+  // Reconexión: si el grupo vuelve con el mismo nombre (otro móvil, página cerrada…), recupera su sitio.
+  const same = teamMembers(d, teamId).find((m) => !m.bot && m.name.toLowerCase() === clean.toLowerCase());
+  if (same) return { player: same };
+  if (teamMembers(d, teamId).length >= CONFIG.maxPorEquipo) {
+    return { error: "Esa marca ya está ocupada. Si sois ese grupo, escribid exactamente el mismo nombre para recuperarla." };
+  }
   const player: PlayerData = { id: randomId(), name: clean, teamId, bot: false };
   d.players.push(player);
   if (d.phase === "prep" && !d.activeTeams.includes(teamId)) d.activeTeams.push(teamId);

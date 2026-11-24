@@ -14,7 +14,7 @@ export const CONFIG = {
   extraSeconds: 30,
   maxLevers: 3,
   maxMessage: 240,
-  maxPorEquipo: 3,
+  maxPorEquipo: 1, // un dispositivo por grupo (los grupos los forma el profesor)
   puntosPorPuesto: [5, 3, 2, 1],
   penalFalsa: 2,
   penalManip: 2,
@@ -70,6 +70,14 @@ export const ROUNDS: RoundDef[] = [
     leccionTitulo: "El retailer es medio, vendedor y competidor.",
     leccion: "Su marca blanca entra con posición patrocinada gratis y datos completos. La fidelización es la mejor defensa.",
   },
+  {
+    numero: 4,
+    nombre: "Compra responsable",
+    encargo: "Quiero unos que duren años y sean respetuosos con el planeta, aunque cuesten algo más.",
+    pista: "Lucía ha leído sobre greenwashing: solo se fía de lo verde que se puede comprobar (reparables, garantía larga, envase sin plástico). Las palabras «eco» o «sostenible» sin datos no le valen.",
+    leccionTitulo: "El greenwashing no engaña a un agente.",
+    leccion: "Lo «verde» solo cuenta si está en los datos: reparabilidad, garantía, envase. Las promesas vagas no suman y, si los datos las contradicen, penalizan.",
+  },
 ];
 
 export interface Preferencias {
@@ -78,6 +86,8 @@ export interface Preferencias {
   ipx: number;
   reparable: number;
   anc: number;
+  garantia: number; // peso por cada año de garantía por encima de 2
+  envaseSinPlastico: number;
   presupuestoMax: number | null;
   fidelidad: number;
   umbralFidelidad: number;
@@ -85,9 +95,10 @@ export interface Preferencias {
 
 // Pesos del motor de respaldo por ronda (solo se aplican a datos visibles).
 export const PREFERENCIAS: Preferencias[] = [
-  { precio: 2, bateria: 3, ipx: 0, reparable: 0, anc: 0.5, presupuestoMax: 50, fidelidad: 0, umbralFidelidad: 0 },
-  { precio: 1, bateria: 0.5, ipx: 3, reparable: 2, anc: 0, presupuestoMax: null, fidelidad: 0, umbralFidelidad: 0 },
-  { precio: 2.5, bateria: 1, ipx: 1, reparable: 0.5, anc: 0.5, presupuestoMax: null, fidelidad: 4, umbralFidelidad: 20 },
+  { precio: 2, bateria: 3, ipx: 0, reparable: 0, anc: 0.5, garantia: 0, envaseSinPlastico: 0, presupuestoMax: 50, fidelidad: 0, umbralFidelidad: 0 },
+  { precio: 1, bateria: 0.5, ipx: 3, reparable: 2, anc: 0, garantia: 0, envaseSinPlastico: 0, presupuestoMax: null, fidelidad: 0, umbralFidelidad: 0 },
+  { precio: 2.5, bateria: 1, ipx: 1, reparable: 0.5, anc: 0.5, garantia: 0, envaseSinPlastico: 0, presupuestoMax: null, fidelidad: 4, umbralFidelidad: 20 },
+  { precio: 0.5, bateria: 0.5, ipx: 0.5, reparable: 3, anc: 0, garantia: 1.5, envaseSinPlastico: 1.5, presupuestoMax: null, fidelidad: 0, umbralFidelidad: 0 },
 ];
 
 export const ROOM_WORDS = ["BUDS", "BEAT", "ONDA", "BASS", "RITMO"];

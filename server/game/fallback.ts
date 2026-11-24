@@ -59,6 +59,10 @@ export function detectFalseClaim(entry: CatalogEntry, catalog: CatalogEntry[]): 
     return "Dice ser reparable y no lo es.";
   if (/(sin plastico|cero plastico|plastic free|libre de plastico)/.test(m) && v.envasePlastico)
     return `Dice «sin plástico» y su envase es: ${v.envase.toLowerCase()}.`;
+  // Greenwashing: se vende como «verde» sin ningún dato que lo respalde (envase de plástico y no reparable).
+  const sinMarca = m.replace(/ritmo verde/g, "");
+  if (/(\beco\b|ecologic|sostenible|respetuos\w* con el (planeta|medio ambiente)|\bverdes?\b|green|planet friendly)/.test(sinMarca) && v.envasePlastico && !v.reparable)
+    return `Se vende como sostenible, pero su envase es de plástico y no es reparable.`;
   const garantia = m.match(/garantia de (\d)\s*anos|(\d)\s*anos de garantia/);
   if (garantia && Number(garantia[1] ?? garantia[2]) > v.garantiaAnios) return `Promete más garantía de la real (${v.garantiaAnios} años).`;
   return "";
@@ -92,10 +96,15 @@ export function fitScore(entry: CatalogEntry, catalog: CatalogEntry[], roundInde
     ipx: v.ipx >= 4 ? 1 : 0,
     reparable: v.reparable ? 1 : 0,
     anc: v.anc ? 1 : 0,
+    garantia: Math.max(0, v.garantiaAnios - 2),
+    envase: v.envasePlastico ? 0 : 1,
   };
   if (entry.datos) {
     s += pref.bateria * attr.bateria + pref.ipx * attr.ipx + pref.reparable * attr.reparable + pref.anc * attr.anc;
+    s += pref.garantia * attr.garantia + pref.envaseSinPlastico * attr.envase;
   } else {
+    if (/garantia/.test(m)) s += 0.5 * pref.garantia * attr.garantia;
+    if (/(plastico|carton|envase)/.test(m)) s += 0.5 * pref.envaseSinPlastico * attr.envase;
     // Sin ficha, ARIA solo sabe lo que la marca cuenta (y sea cierto): media credibilidad.
     s -= 0.5;
     if (/(bateria|horas|\d+\s*h\b|autonomia)/.test(m)) s += 0.5 * pref.bateria * attr.bateria;
@@ -114,6 +123,7 @@ function describeVisible(e: CatalogEntry): string {
     parts.push(`${e.datos.bateriaH} h`, `IPX${e.datos.ipx}`);
     if (e.datos.anc) parts.push("cancelación de ruido");
     if (e.datos.reparable) parts.push("reparable");
+    if (e.datos.garantiaAnios > 2) parts.push(`${e.datos.garantiaAnios} años de garantía`);
   }
   if (e.resenas) parts.push(`${e.resenas.nota.toLocaleString("es-ES")}★ (${e.resenas.num})`);
   return parts.join(", ");

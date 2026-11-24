@@ -139,7 +139,7 @@ function Join({ code, cfg, counts, onJoined }: { code: string; cfg: PublicConfig
   const brands = cfg.products.filter((p) => !p.esMarcaBlanca);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return setError("Escribe tu nombre.");
+    if (!name.trim()) return setError("Escribe el nombre de tu grupo.");
     if (!team) return setError("Elige una marca.");
     setBusy(true);
     api<{ playerId: string }>("join", {}, { code, name, teamId: team })
@@ -152,8 +152,9 @@ function Join({ code, cfg, counts, onJoined }: { code: string; cfg: PublicConfig
       <MobileTitle />
       <div className="mono small muted">SALA {code}</div>
       <div className="m-card">
-        <label className="m-label" htmlFor="name">Tu nombre</label>
-        <input id="name" className="m-input" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" />
+        <label className="m-label" htmlFor="name">Nombre del grupo</label>
+        <span className="muted small">Si os desconectáis, entrad con el mismo nombre y marca para recuperar la partida.</span>
+        <input id="name" className="m-input" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="Ej.: Grupo 3" />
       </div>
       <fieldset className="m-card m-fieldset">
         <legend className="m-label">Elige tu marca</legend>
@@ -165,22 +166,21 @@ function Join({ code, cfg, counts, onJoined }: { code: string; cfg: PublicConfig
               <button
                 type="button"
                 key={b.id}
-                className={`brand-pick ${team === b.id ? "on" : ""}`}
+                className={`brand-pick ${team === b.id ? "on" : ""} ${full ? "taken" : ""}`}
                 style={{ ["--brand" as any]: b.color }}
-                disabled={full}
                 aria-pressed={team === b.id}
                 onClick={() => setTeam(b.id)}
               >
                 <span className="brand-dot" />
                 <span className="brand-pick-name">{b.nombre}</span>
-                <span className="mono small">{full ? "Completo" : `${n}/${cfg.config.maxPorEquipo}`}</span>
+                <span className="mono small">{full ? "Ocupada" : "Libre"}</span>
               </button>
             );
           })}
         </div>
       </fieldset>
       {error ? <p className="m-error">{error}</p> : null}
-      <button className="btn btn--primary btn--block" disabled={busy}>Unirme al equipo</button>
+      <button className="btn btn--primary btn--block" disabled={busy}>Entrar con esta marca</button>
     </form>
   );
 }
@@ -393,7 +393,7 @@ function PrepScreen({ state, cfg, product, header, actions }: { state: PlayState
               <button className="btn btn--primary btn--block btn--lg" onClick={() => { actions.submit(message, levers); setLocalSubmitted(true); }}>
                 <IconSend size={18} /> Enviar a ARIA
               </button>
-              <p className="muted small center">Al enviar, la ficha queda bloqueada para todo el equipo.</p>
+              <p className="muted small center">Al enviar, la ficha queda bloqueada.</p>
             </>
           )}
         </>

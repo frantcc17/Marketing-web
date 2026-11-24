@@ -295,6 +295,7 @@ h1, h2, h3 { margin: 0; }
 .brand-pick { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 14px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--term); cursor: pointer; text-align: left; }
 .brand-pick.on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, var(--term)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 40%, transparent); }
 .brand-pick:disabled { opacity: .4; }
+.brand-pick.taken:not(.on) { opacity: .5; }
 .brand-pick-name { flex: 1; font-weight: 600; font-size: 16px; }
 .m-header { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--brand); }
 .m-team { font-family: var(--f-title); font-weight: 700; font-size: 18px; }
@@ -343,3 +344,10 @@ h1, h2, h3 { margin: 0; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 .m-card--row { flex-direction: row; justify-content: space-between; align-items: center; }
+.team-count.lime { color: var(--lime); }
+/* Final con 4 lecciones + bonus: tarjetas más compactas para que quepan en 720 px */
+.final-lessons { gap: 8px; }
+.final-lessons .h2 { font-size: 22px; }
+.final-lesson { padding: 10px 14px; gap: 2px; }
+.final-lesson .h3 { font-size: 16px; }
+.final-lesson p { font-size: 13px; line-height: 1.35; }
